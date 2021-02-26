@@ -296,6 +296,10 @@ interface IOracle {
     function update() external;
 }
 
+interface IUniswapSync {
+    function sync() external;
+}
+
 
 /**
  * @title uFragments Monetary Supply Policy
@@ -368,6 +372,9 @@ contract UFragmentsPolicy is Ownable {
 
     // This module orchestrates the rebase execution and downstream notification.
     address public orchestrator;
+    
+    // This contract updates the pool reserves after rebases
+    address public tokenPool;
 
     modifier onlyOrchestrator() {
         require(msg.sender == orchestrator);
@@ -424,7 +431,18 @@ contract UFragmentsPolicy is Ownable {
 
         uint256 supplyAfterRebase = uFrags.rebase(epoch, supplyDelta);
         require(supplyAfterRebase <= MAX_SUPPLY, "max supply exceded");
+        
+        IUniswapSync(tokenPool).sync();                              // Sync the pool reserves after rebases to show new price
+        
         emit LogRebase(epoch, exchangeRate, cpi, supplyDelta, block.timestamp);
+    }
+    
+    /**
+     * @notice Sets the reference to the LP contract
+     * @param tokenPool_ The address of the LP contract.
+     */
+    function setTokenPoolContract(address tokenPool_) public onlyOwner {
+        tokenPool = tokenPool_;
     }
 
     /**
