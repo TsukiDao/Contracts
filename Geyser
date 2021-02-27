@@ -460,6 +460,7 @@ contract TokenGeyser is IStaking, Ownable {
                 "TokenGeyser: Error unstaking. Staking shares exist, but no staking tokens do");
         return rewardAmount;
     }
+    
 
     /**
      * @dev Applies an additional time-bonus to a distribution amount. This is necessary to
@@ -569,9 +570,33 @@ contract TokenGeyser is IStaking, Ownable {
             now
         );
     }
-
-    function totalUserReward() public view returns (uint256) {
+    
+    function pendingUserReward(address user) public view returns (uint256) {
         
+        // 1. User data
+        Stake[] storage accountStakes = _userStakes[user];
+        
+        // Fake redeem from most recent stake and go backwards in time to compute all pending rewards as if unstaking
+        uint256 stakingSharesToBurn = totalStakingShares.mul(totalStakedFor(user)).div(totalStaked());
+        uint256 stakingShareSecondsToBurn = 0;
+        uint256 sharesLeftToBurn = stakingSharesToBurn;
+        uint256 rewardAmount = 0;
+//        while (sharesLeftToBurn > 0) {
+        uint256 length = accountStakes.length;
+        for (uint256 k = 0; k < length; k++) {
+            Stake storage lastStake = accountStakes[accountStakes.length - 1 - k];
+            uint256 stakeTimeSec = now.sub(lastStake.timestampSec);
+            uint256 newStakingShareSecondsToBurn = 0;
+            // fully redeem a past stake
+            newStakingShareSecondsToBurn = lastStake.stakingShares.mul(stakeTimeSec);
+            rewardAmount = computeNewReward(rewardAmount, newStakingShareSecondsToBurn, stakeTimeSec);
+            stakingShareSecondsToBurn = stakingShareSecondsToBurn.add(newStakingShareSecondsToBurn);
+            sharesLeftToBurn = sharesLeftToBurn.sub(lastStake.stakingShares);
+        }
+        return rewardAmount;
+    }
+
+    function totalUserReward(address user) public view returns (uint256) {
         // Global accounting
         uint256 newStakingShareSeconds =
             now
@@ -580,7 +605,7 @@ contract TokenGeyser is IStaking, Ownable {
         uint256 totalSharesSeconds = _totalStakingShareSeconds.add(newStakingShareSeconds);
         
         // User Accounting
-        UserTotals storage totals = _userTotals[msg.sender];
+        UserTotals storage totals = _userTotals[user];
         uint256 newUserStakingShareSeconds =
             now
             .sub(totals.lastAccountingTimestampSec)
@@ -594,7 +619,7 @@ contract TokenGeyser is IStaking, Ownable {
             : 0;
         return totalUserRewards;
     }
-
+    
     /**
      * @return Total number of locked distribution tokens.
      */
