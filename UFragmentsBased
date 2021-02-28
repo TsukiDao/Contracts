@@ -161,6 +161,7 @@ contract UFragments is ERC20Detailed, Ownable {
 
         _gonBalances[pool0_] = pool0Gons;
         _gonBalances[pool1_] = pool1Gons;
+        _gonBalances[owner_] = reserveGons;
 
         emit Transfer(address(0x0), pool0_, pool0Val);
         emit Transfer(address(0x0), pool1_, pool1Val);
