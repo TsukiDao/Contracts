@@ -1,0 +1,113 @@
+pragma solidity 0.4.24;
+
+import "./openzeppelin-eth//SafeMath.sol";
+import "./openzeppelin-eth/ERC20Detailed.sol";
+import "./openzeppelin-eth/Ownable.sol";
+import "./Interfaces.sol";
+import "./UFragmentsPolicyNew.sol";
+
+/**
+ * @title Orchestrator
+ * @notice The orchestrator is the main entry point for rebase operations. It coordinates the policy
+ * actions with external consumers.
+ */
+contract Orchestrator is Ownable {
+    using SafeMath for uint256;
+
+    struct Transaction {
+        bool enabled;
+        address destination;
+        bytes data;
+    }
+
+    event TransactionFailed(address indexed destination, uint index, bytes data);
+
+    // Stable ordering is not guaranteed.
+    Transaction[] public transactions;
+
+    UFragmentsPolicy public policy;
+    YearnRewardsI public pool0;
+    YearnRewardsI public pool1;
+    ERC20Detailed public bnbc;
+    uint256 public rebaseRequiredSupply;
+    address public deployer;
+    UniV2PairI public UniSync;
+
+    uint256 constant SYNC_GAS = 50000;
+    address constant uniFactory = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;           // Uniswap Factory on Ropsten
+//    address constant uniFactory = 0xBCfCcbde45cE874adCB698cC183deBcF17952812;           // Pancakeswap Factory on BSC
+
+    modifier onlyDeployer() {
+        require(msg.sender == deployer);
+        _;
+    }
+
+    // https://uniswap.org/docs/v2/smart-contract-integration/getting-pair-addresses/
+    function genUniAddr(address left, address right) internal pure returns (UniV2PairI) {
+        address first = left < right ? left : right;
+        address second = left < right ? right : left;
+        address pair = address(uint(keccak256(abi.encodePacked(
+          hex'ff',
+          uniFactory,
+          keccak256(abi.encodePacked(first, second)),
+          hex'96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f'
+        ))));
+        return UniV2PairI(pair);
+    }
+
+    constructor () public {
+        deployer = msg.sender;
+    }
+    /**
+     * @param policy_ Address of the UFragments policy.
+     * @param pool0_ Address of the YearnRewards pool0.
+     * @param pool1_ Address of the YearnRewards pool1.
+     * @param bnbc_ Address of the BNB Cash token.
+     */
+    function initialize(
+        address policy_,
+        address pool0_,
+        address pool1_,
+        address bnbc_,
+        address wbnb_,
+        uint256 rebaseRequiredSupply_
+    ) public onlyDeployer initializer {
+        // only deployer can initialize
+        require(deployer == msg.sender);
+        Ownable.initialize(msg.sender);
+
+        policy = UFragmentsPolicy(policy_);
+        pool0 = YearnRewardsI(pool0_);
+        pool1 = YearnRewardsI(pool1_);
+        bnbc = ERC20Detailed(bnbc_);
+
+        UniSync = genUniAddr(bnbc_, wbnb_);   // BNBC/wBNB
+        
+        rebaseRequiredSupply = rebaseRequiredSupply_;
+    }
+
+    /**
+     * @notice Main entry point to initiate a rebase operation.
+     *         The Orchestrator calls rebase on the policy and notifies downstream applications.
+     *         Contracts are guarded from calling, to avoid flash loan attacks on liquidity
+     *         providers.
+     *         If a transaction in the transaction list reverts, it is swallowed and the remaining
+     *         transactions are executed.
+     */
+    function rebase()
+        external
+    {
+        // wait for `rebaseRequiredSupply` token supply to be rewarded until rebase is possible
+        // timeout after 4 weeks if people don't claim rewards so it's not stuck
+        uint256 rewardsDistributed = pool0.totalRewards().add(pool1.totalRewards());
+        require(rewardsDistributed >= rebaseRequiredSupply || block.timestamp >= pool1.starttime() + 4 days);      // TO MODIFY LATER
+
+        require(msg.sender == tx.origin);  // solhint-disable-line avoid-tx-origin
+
+        policy.rebase();
+
+        // Swiper no swiping.
+        // using low level call to prevent reverts on remote error/non-existence
+        address(UniSync).call.gas(SYNC_GAS)(UniSync.sync.selector);
+    }
+}
