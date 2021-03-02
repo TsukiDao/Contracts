@@ -991,16 +991,13 @@ contract Orchestrator is Ownable {
     Transaction[] public transactions;
 
     UFragmentsPolicy public policy;
-    YearnRewardsI public pool0;
-    YearnRewardsI public pool1;
     ERC20Detailed public bnbc;
-    uint256 public rebaseRequiredSupply;
     address public deployer;
     UniV2PairI public UniSync;
 
     uint256 constant SYNC_GAS = 50000;
-    address constant uniFactory = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;           // Uniswap Factory on Ropsten
-//    address constant uniFactory = 0xBCfCcbde45cE874adCB698cC183deBcF17952812;           // Pancakeswap Factory on BSC
+//    address constant uniFactory = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;           // Uniswap Factory on Ropsten
+    address constant uniFactory = 0xBCfCcbde45cE874adCB698cC183deBcF17952812;           // Pancakeswap Factory on BSC
 
     modifier onlyDeployer() {
         require(msg.sender == deployer);
@@ -1025,30 +1022,21 @@ contract Orchestrator is Ownable {
     }
     /**
      * @param policy_ Address of the UFragments policy.
-     * @param pool0_ Address of the YearnRewards pool0.
-     * @param pool1_ Address of the YearnRewards pool1.
      * @param bnbc_ Address of the BNB Cash token.
      */
     function initialize(
         address policy_,
-        address pool0_,
-        address pool1_,
         address bnbc_,
-        address wbnb_,
-        uint256 rebaseRequiredSupply_
+        address wbnb_
     ) public onlyDeployer initializer {
         // only deployer can initialize
         require(deployer == msg.sender);
         Ownable.initialize(msg.sender);
 
         policy = UFragmentsPolicy(policy_);
-        pool0 = YearnRewardsI(pool0_);
-        pool1 = YearnRewardsI(pool1_);
         bnbc = ERC20Detailed(bnbc_);
 
         UniSync = genUniAddr(bnbc_, wbnb_);   // BNBC/wBNB
-        
-        rebaseRequiredSupply = rebaseRequiredSupply_;
     }
 
     /**
@@ -1062,11 +1050,6 @@ contract Orchestrator is Ownable {
     function rebase()
         external
     {
-        // wait for `rebaseRequiredSupply` token supply to be rewarded until rebase is possible
-        // timeout after 4 weeks if people don't claim rewards so it's not stuck
-        uint256 rewardsDistributed = pool0.totalRewards().add(pool1.totalRewards());
-        require(rewardsDistributed >= rebaseRequiredSupply || block.timestamp >= pool1.starttime() + 4 days);      // TO MODIFY LATER
-
         require(msg.sender == tx.origin);  // solhint-disable-line avoid-tx-origin
 
         policy.rebase();
