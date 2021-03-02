@@ -563,7 +563,7 @@ contract OracleTWAP {
 
     // note this will always return 0 before update has been called successfully for the first time.
     function getData() external view returns (uint amountOut, bool validRate) {
-        amountOut = price0Average.mul(10**9).decode144();     // Added mul.(10**8) to take into account different decimals between tokens
+        amountOut = price0Average.mul(1e18).decode144();     // Changed amountIn parameter by 1e18 to get the price of 1 BNBC
         if (amountOut > 0) validRate = true;
         else validRate = false;
     }
