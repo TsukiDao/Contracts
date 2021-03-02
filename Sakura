@@ -689,7 +689,7 @@ contract LPTokenWrapper is Initializable {
     }
 }
 
-contract TSUKIPool0 is LPTokenWrapper, IRewardDistributionRecipient {
+contract Sakura is LPTokenWrapper, IRewardDistributionRecipient {
     IERC20 public bnbc;
     uint256 public duration;
 
@@ -703,8 +703,8 @@ contract TSUKIPool0 is LPTokenWrapper, IRewardDistributionRecipient {
     bool public fairDistribution;
     address public deployer;
 
-    address constant uniFactory = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;           // Uniswap Factory on Ropsten
-//    address constant uniFactory = 0xBCfCcbde45cE874adCB698cC183deBcF17952812;           // Pancakeswap Factory on BSC
+//    address constant uniFactory = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;           // Uniswap Factory on Ropsten
+    address constant uniFactory = 0xBCfCcbde45cE874adCB698cC183deBcF17952812;           // Pancakeswap Factory on BSC
 
     mapping(address => uint256) public userRewardPerTokenPaid;
     mapping(address => uint256) public rewards;
@@ -733,33 +733,17 @@ contract TSUKIPool0 is LPTokenWrapper, IRewardDistributionRecipient {
         deployer = msg.sender;
     }
 
-    // https://uniswap.org/docs/v2/smart-contract-integration/getting-pair-addresses/
-    function genUniAddr(address left, address right) internal pure returns (address) {
-        address first = left < right ? left : right;
-        address second = left < right ? right : left;
-        address pair = address(uint(keccak256(abi.encodePacked(
-          hex'ff',
-          uniFactory,
-          keccak256(abi.encodePacked(first, second)),
-          hex'96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f'
-        ))));
-        return pair;
-    }
-
-    // changing function signature to break deployer code intentionally.
-    // ensures we can't accidentally use previous deployer
-    function initialize(
-        uint256 _duration,
-        uint256 _initreward,
-        uint256 _starttime,
-        address _wbnb,
-        address _tsuki,
-        address _bnbc,
-        bool _fairDistribution
-    ) public onlyDeployer initializer {
-        setStakeToken(
-            genUniAddr(_wbnb, _tsuki)
-        );
+    // changing function signature to break deployer code intentionally.	
+    // ensures we can't accidentally use previous deployer	
+    function initialize(	
+        uint256 _duration,	
+        uint256 _initreward,	
+        uint256 _starttime,	
+        address _stakeToken,	
+        address _bnbc,	
+        bool _fairDistribution	
+    ) public onlyDeployer initializer {	
+        setStakeToken(_stakeToken);	
         bnbc = IERC20(_bnbc);
 
         duration = _duration;
