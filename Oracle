@@ -520,7 +520,7 @@ contract OracleTWAP {
 
     uint public constant PERIOD = 10;
 
-    IUniswapV2Pair immutable pair;
+    address public pair;
     address public immutable token0;
     address public immutable token1;
 
@@ -530,9 +530,9 @@ contract OracleTWAP {
     FixedPoint.uq112x112 public price0Average;
     FixedPoint.uq112x112 public price1Average;
 
-    constructor(address factory, address tokenA, address tokenB) public {
-        IUniswapV2Pair _pair = IUniswapV2Pair(UniswapV2Library.pairFor(factory, tokenA, tokenB));
-        pair = _pair;
+    constructor() public {
+        pair = 0xa4B9963AD14DC02e081CC81b4f8fEd99CC90F0b1;      // BNBC-BNB LP contract address
+        IUniswapV2Pair _pair = IUniswapV2Pair(pair);      
         token0 = _pair.token0();
         token1 = _pair.token1();
         price0CumulativeLast = _pair.price0CumulativeLast(); // fetch the current accumulated price value (1 / 0)
@@ -559,6 +559,28 @@ contract OracleTWAP {
         price0CumulativeLast = price0Cumulative;
         price1CumulativeLast = price1Cumulative;
         blockTimestampLast = blockTimestamp;
+    }
+    
+    /**
+     * @notice Calculates current TWAP from uniswap
+     *
+     */
+    function getCurrentTWAP()
+        public
+        view
+        returns (uint256)
+    {
+      (uint price0Cumulative, uint price1Cumulative, uint32 blockTimestamp) =
+         UniswapV2OracleLibrary.currentCumulativePrices(pair);
+       uint32 timeElapsed = blockTimestamp - blockTimestampLast; // overflow is desired
+
+       // no period check as is done in isRebaseWindow
+
+       // overflow is desired, casting never truncates
+        // cumulative price is in (uq112x112 price * seconds) units so we simply wrap it after division by time elapsed
+        FixedPoint.uq112x112 memory priceAverage = FixedPoint.uq112x112(uint224((price0Cumulative - price0CumulativeLast) / timeElapsed));
+
+        return FixedPoint.decode144(FixedPoint.mul(priceAverage, 10**18));
     }
 
     // note this will always return 0 before update has been called successfully for the first time.
